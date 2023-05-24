@@ -520,47 +520,50 @@ maxplots<-4  # USER: Set the maximum number of graphs to plot in row/column of a
 plot_to_pdf<-F # to be set by the USER 
 
 ###########################
-# Create a selection of donors that should have been deferred at donation i but did donate 
-# at least i times
+# Create a selection of donors that should have been deferred at donation 'def' but did donate 
+# at least n times
 def<-5 # to be set by the USER 
-i<-7   # to be set by the USER 
+n<-7   # to be set by the USER 
 # Nr of donors that fit the criterion
-eval(parse(text=paste0("sum(MeanHb",def,"+d/sqrt(",def,")<th & Hb",def,">th & !is.na(Hb",i,"))")))
-if (eval(parse(text=paste0("sum(MeanHb",def,"+d/sqrt(",def,")<th & Hb",def,">th & !is.na(Hb",i,"))")))>0) {
+eval(parse(text=paste0("sum(MeanHb",def,"+d/sqrt(",def,")<th & Hb",def,">th & !is.na(Hb",n,"))")))
+if (eval(parse(text=paste0("sum(MeanHb",def,"+d/sqrt(",def,")<th & Hb",def,">th & !is.na(Hb",n,"))")))>0) {
   # set selection of donors
-  eval(parse(text=paste0("selID<-KeyID[MeanHb",def,"+d/sqrt(",def,")<th & Hb",def,">th & !is.na(Hb",i,")]")))
+  eval(parse(text=paste0("selID<-KeyID[MeanHb",def,"+d/sqrt(",def,")<th & Hb",def,">th & !is.na(Hb",n,")]")))
+  print(selID)
   # plot the donor profile in a matrix
-  if(plot_to_pdf) pdf(file=paste0("Deferral at donation ",def,", minimum of ",i," donations.pdf"))
+  if(plot_to_pdf) pdf(file=paste0("Deferral at donation ",def,", minimum of ",n," donations.pdf"))
   plotmatrix(selID, 2, ylim=c(70,160))
   if(plot_to_pdf) dev.off()
 }
 ###########################
-# select donors with ndef deferrals at donation i and an average Hb level above the threshold
-i<-30     # to be set by the USER 
-ndef<-10  # to be set by the USER 
+# select donors with at least ndef deferrals at donation n and an average Hb level above the deferral threshold
+n<-29     # to be set by the USER 
+ndef<-8  # to be set by the USER 
 # Nr of donors selected
-eval(parse(text=paste0("sum( nHb",i,"-HbOk",i,">",ndef-1," & MeanHb",i,">th )")))
-if(eval(parse(text=paste0("sum( nHb",i,"-HbOk",i,">",ndef-1," & MeanHb",i,">th )")))>0){
+eval(parse(text=paste0("sum( nHb",n,"-HbOk",n,">",ndef-1," & MeanHb",n,">th & !is.na(Hb",n,"))")))
+if(eval(parse(text=paste0("sum( nHb",n,"-HbOk",n,">",ndef-1," & MeanHb",n,">th & !is.na(Hb",n,"))")))>0){
   # set selection of donors
-  eval(parse(text=paste0("selID<-KeyID[nHb",i,"-HbOk",i,">",ndef-1," & MeanHb",i,">th]")))
+  eval(parse(text=paste0("selID<-KeyID[nHb",n,"-HbOk",n,">",ndef-1," & MeanHb",n,">th& !is.na(Hb",n,")]")))
+  print(selID)
   # plot the donor profile in a matrix
-  if(plot_to_pdf) pdf(file=paste0("Deferral at ",i,", but with an average Hb level above the threshold.pdf"))
+  if(plot_to_pdf) pdf(file=paste0("Deferral at ",n,", but with an average Hb level above the threshold.pdf"))
   plotmatrix(selID, 2)
   if(plot_to_pdf) dev.off()
 }
 ###########################
-# Create a selection of donors that were deferred at donation i but have 
+# Create a selection of donors that were deferred at donation n but have 
 # an average Hb level well above (a value "delta") the deferral threshold
-i<-30    # to be set by the USER 
+n<-30    # to be set by the USER 
 delta<-5 # to be set by the USER 
 # Nr of donors selected
-eval(parse(text=paste0("sum(MeanHb",i,">th+delta & Hb",i,"<th & !is.na(Hb",i,"))")))
-if (eval(parse(text=paste0("sum(MeanHb",i,">th+delta & Hb",i,"<th & !is.na(Hb",i,"))")))>0){
+eval(parse(text=paste0("sum(MeanHb",n,">th+delta & Hb",n,"<th & !is.na(Hb",n,"))")))
+if (eval(parse(text=paste0("sum(MeanHb",n,">th+delta & Hb",n,"<th & !is.na(Hb",n,"))")))>0){
   # set selection of donors
-  eval(parse(text=paste0("selID<-KeyID[MeanHb",i,">th+delta & Hb",i,"<th & !is.na(Hb",i,")]")))
+  eval(parse(text=paste0("selID<-KeyID[MeanHb",n,">th+delta & Hb",n,"<th & !is.na(Hb",n,")]")))
+  print(selID)
   # plot the donor profile in a matrix
-  if(plot_to_pdf) pdf(file=paste0("Deferral at ",i,", but with an average of ",delta," above the threshold.pdf"))
-  plotmatrix(selID, 2)
+  if(plot_to_pdf) pdf(file=paste0("Deferral at ",n,", but with an average of ",delta," above the threshold.pdf"))
+  plotmatrix(selID, 3)
   if(plot_to_pdf) dev.off()
   # plot another subset
   plotmatrix(selID, 2, seedvalue=2)
