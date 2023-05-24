@@ -20,6 +20,7 @@ FileToUse<-"testdata.RDS"
 
 # All relevant input and output information is stored in the "tosave" variable
 # This information is stored in a file called "SavedDeferralData_DD-MM-YYYY.RDS"
+# the first item is the name of the datafile used for the analyses
 tosave<-list(FileToUse=FileToUse)
 
 # Set minimum acceptable Hb levels for males and females
@@ -99,6 +100,7 @@ data<-data[order(data$KeyID,data$DonDate),]
 # Create index for nr of donations
 data$numdons <- sequence(rle(data$KeyID)$lengths)
 
+
 # nr of donors
 length(unique(data$KeyID)) 
 # nr of donations
@@ -122,13 +124,23 @@ table(data$numdons, data$Sex)
 meanHb<-aggregate(data$Hb, by=list(data$KeyID), mean)
 SdHb<-aggregate(data$Hb, by=list(data$KeyID), sd)
 nHb<-aggregate(data$Hb, by=list(data$KeyID, data$Sex), length)
+# aggregate these results
+adata<-merge(meanHb,SdHb, by="Group.1")
+adata<-merge(adata,nHb, by="Group.1")
+adata$Group.1<-NULL
+colnames(adata)<-c("Hb", "sd", "Sex", "Nrdon")
+
+# calculate distributions for various subsets of nr of donations
+malefits<-fitHbdistributions(adata[adata$Sex=="M",])
+femalefits<-fitHbdistributions(adata[adata$Sex=="F",])
+
 # set parameter for maximum follow-up
 maxDons<-max(nHb$x)
 
-# save this info
-tosave<-append(tosave, list(meanHb=meanHb))
-tosave<-append(tosave, list(SdHb=SdHb))
-tosave<-append(tosave, list(nHb=nHb))
+# save distribution fits and maxDons
+tosave<-append(tosave, list(malefits=malefits))
+tosave<-append(tosave, list(femalefits=femalefits))
+tosave<-append(tosave, list(maxDons=maxDons))
 
 # convert Hb levels if so required
 if (!Hb_in_gpl){
@@ -474,9 +486,12 @@ sms3[6]         # number missed by deferred donors
 sms3[6]/totn3   # proportion missed by deferred donors
 sms3[8]/totn3   # Reviewed for low relative Hb 
 
+
+
 #######################################################
 # plot some individual donor profiles
 #######################################################
+# for internal use only
 
 maxplots<-4  # the maximum number of graphs to plot in row/column of a matrix
 # plotdonorprofile(KeyID[250], leg=T, ylim=c(0,190)) # nice illustration with a range of 10 unnecessary deferrals 
