@@ -150,3 +150,69 @@ plotmatrix<-function(selID, maxplots, ylim=c(80,180), seedvalue=1){
   }
 }
 
+fitHbdistributions<-function(data, nrofquantiles=20) {
+  # function that fits kernel density and smoothing spline for various ranges 
+  # of nr of donations per donor. The nr of splits is determined by 
+  # the parameter nrofquantiles
+  # the input data should consist of variables Hb, sd and Nrdon
+  # the function produces three plots; the nr of observations per splitpoint, and
+  # for Hb and sd per splitpoint the kde, spline and normal fits with the data
+  # the counts and fit parameters are returned by the function
+  
+  quantiles <- quantile(data$Nrdon, prob = seq(0, 1, length = nrofquantiles+1), type = 5)
+  data$cutted <- cut2(data$Nrdon, cuts = unique(as.numeric(quantiles)))
+  nrsplits<-length(levels(data$cutted))
+  hist(as.numeric(data$cutted))
+  sum(table(data$Nrdon))
+  nrobs<-table(data$cutted, useNA="always")
+  print(nrobs)
+  correctforone<-ifelse(as.numeric(dimnames(nrobs)[[1]][1])==1,1,0)
+  minsubset<-min(nrobs[nrobs>0]) # set minimum subset size
+  
+  # set frame for plotting
+  lid<-round(sqrt(nrsplits))
+  par(mfrow=c(lid,ceiling(nrsplits/lid)))
+  
+  # distribution of Hb levels
+  par(mfrow=c(lid,ceiling(nrsplits/lid)))
+  Hbdistr<-list(n=table(data$cutted, useNA="always"))
+  for (i in 1:length(levels(data$cutted))){
+    de<-density(data$Hb[data$cutted==levels(data$cutted)[i]])
+    de$s<-cumsum(de$y)/sum(de$y)
+    spl <- with(de, smooth.spline(x, s, df = 25))
+    
+    normfit<-fitdist(data$Hb[data$cutted==levels(data$cutted)[i]], 'norm')
+    denscomp(normfit)
+    lines(de$x,de$Hb)
+    spl <- with(de,smooth.spline(x, s, df = 40))
+    lines(predict(spl, de$x, deriv = 1), col = "blue")
+    eval(parse(text=paste0("Hbdistr<-append(Hbdistr,list(de",i,"=de))")))
+    eval(parse(text=paste0("Hbdistr<-append(Hbdistr,list(spl",i,"=spl))")))
+  }
+  # distribution of Hb sd estimates
+  lid<-round(sqrt(nrsplits-correctforone))
+  par(mfrow=c(lid,ceiling((nrsplits-correctforone)/lid)))
+  Hbsddistr<-list()
+  for (i in 1:length(levels(data$cutted))){
+    dat<-data$sd[data$cutted==levels(data$cutted)[i]]
+    dat<-dat[!is.na(dat)]
+    if (length(dat)>1 & str_trim(dimnames(nrobs)[[1]][i])!="1") {
+      if(length(dat)<minsubset) minsubset<-length(dat)
+      de<-density(dat)
+      de$s<-cumsum(de$y)/sum(de$y)
+      spl <- with(de,smooth.spline(x, s, df = 25))
+      
+      normfit<-fitdist(dat, 'norm')
+      denscomp(normfit)
+      lines(de$x,de$y)
+      spl <- with(de,smooth.spline(x, s, df = 40))
+      lines(predict(spl, de$x, deriv = 1), col = "blue")
+      eval(parse(text=paste0("Hbsddistr<-append(Hbsddistr,list(de",i,"=de))")))
+      eval(parse(text=paste0("Hbsddistr<-append(Hbsddistr,list(spl",i,"=spl))")))
+      eval(parse(text=paste0("Hbsddistr<-append(Hbsddistr,list(n",i,"=length(dat)))")))
+    }
+  }
+  par(mfrow=c(1,1))
+  print(paste("minimum subset size:", minsubset))
+  return(list(Hbdistr=Hbdistr, Hbsddistr=Hbsddistr))
+}
