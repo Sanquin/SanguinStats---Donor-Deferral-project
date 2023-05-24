@@ -11,7 +11,7 @@ cat("\014")
 #############################
 
 # set name of the datafile to use
-FileToUse<-"testdata.RDS" 
+FileToUse<-"testdata.RDS" # to be set by the USER 
 # "FileToUSe" should contain the following data columns (data type in brackets):
 # KeyID   : Unique identifier for each donor (integer)
 # Sex     : indicator for Male (M) or Female (F) donor (factor)
@@ -20,15 +20,13 @@ FileToUse<-"testdata.RDS"
 
 # All relevant input and output information is stored in the "tosave" variable
 # This information is stored in a file called "SavedDeferralData_DD-MM-YYYY.RDS"
-# the first item is the name of the datafile used for the analyses
-tosave<-list(FileToUse=FileToUse)
 
 # Set minimum acceptable Hb levels for males and females
-dtm<-8.4
-dtf<-7.8
+dtm<-8.4  # to be set by the USER 
+dtf<-7.8  # to be set by the USER 
 
 # Are Hb levels given in g/L (T) or in mmol/L (F)
-Hb_in_gpl<-F
+Hb_in_gpl<-F # to be set by the USER 
 
 # European threshold (g/L)
 135*0.06206 # 135g/L for males = 8.3781 mmol/L
@@ -37,12 +35,13 @@ round(135*0.06206,1) # 8.4 mmol/L
 round(125*0.06206,1) # 7.8 mmol/L
 
 # Is a change in anonymous donor IDs required?
-changeIDs<-F
+changeIDs<-F # to be set by the USER 
 
 # Set deferral percentile level
-cutoffperc<-0.99
-# save cutoff percentage applied
-tosave<-append(tosave, list(cutoffperc=cutoffperc))
+cutoffperc<-0.99 # to be set by the USER 
+
+# set minimum size of the groups for aggregated data
+mingroupsize<-20 # to be set by the USER 
 
 # Note that the analyses may take a substantial amount of time. Therefore an analysis file 
 # ("donations_analysis_data.RDS") will be created, which allows speeding up the analyses
@@ -53,8 +52,11 @@ tosave<-append(tosave, list(cutoffperc=cutoffperc))
 # Initialize R
 #############################
 # load various R libraries required for the analyses
-library("zoo") # required for rollmean function
+library("zoo")       # required for rollmean function
 library("lubridate") # required for extracting year info from a date variable
+library("Hmisc")     # to enable calculating splitpoints
+library("fitdistrplus") # to fit and plot normal distribution fits to the data
+library("stringr")   # to manipulate strings
 
 # restore old color palette
 palette("R3")
@@ -65,6 +67,13 @@ source("General_functions.R")
 #############################
 # read data
 #############################
+# but first write some of the input data to the tosave variable
+# the first item is the name of the datafile used for the analyses
+tosave<-list(FileToUse=FileToUse)
+# save cutoff percentage applied
+tosave<-append(tosave, list(cutoffperc=cutoffperc))
+
+# now read in the data
 data<-readRDS(FileToUse)
 (classes<-sapply(data,class))
 #     KeyID         Sex     DonDate          Hb 
@@ -74,6 +83,7 @@ data<-readRDS(FileToUse)
 daterange<-min(data$DonDate)
 (daterange<-c(daterange,max(data$DonDate)))
 nrrecs<-nrow(data)
+
 # save info
 tosave<-append(tosave, list(daterange=daterange))
 
@@ -131,8 +141,16 @@ adata$Group.1<-NULL
 colnames(adata)<-c("Hb", "sd", "Sex", "Nrdon")
 
 # calculate distributions for various subsets of nr of donations
-malefits<-fitHbdistributions(adata[adata$Sex=="M",])
-femalefits<-fitHbdistributions(adata[adata$Sex=="F",])
+malefits  <-fitHbdistributions(adata[adata$Sex=="M",],nrofquantiles=20)
+femalefits<-fitHbdistributions(adata[adata$Sex=="F",],nrofquantiles=20)
+
+# stop execution of groupsize is larger than required by the user
+if(malefits$minsubset<mingroupsize | malefits$minsubset<mingroupsize) {
+  print("Code stopped because aggregated group size is smaller than specified by the user")
+  print("Please decrease the nrofquantiles parameter in the fitHbdistributions functions (line 144/145)")
+  print("or increase the mingroupsize (line 44)")
+  stop("Change analysis code")
+}
 
 # set parameter for maximum follow-up
 maxDons<-max(nHb$x)
@@ -492,54 +510,58 @@ sms3[8]/totn3   # Reviewed for low relative Hb
 # plot some individual donor profiles
 #######################################################
 # for internal use only
+# note that the number of 
 
-maxplots<-4  # the maximum number of graphs to plot in row/column of a matrix
+maxplots<-4  # USER: Set the maximum number of graphs to plot in row/column of a matrix
 # plotdonorprofile(KeyID[250], leg=T, ylim=c(0,190)) # nice illustration with a range of 10 unnecessary deferrals 
 # plotdonorprofile(KeyID[250], ylim=c(75,210)) # nice illustration with a range of 10 unnecessary deferrals 
 
 # parameter to determine whether the plots go to a pdf file or to screen.
-plot_to_pdf<-F
+plot_to_pdf<-F # to be set by the USER 
 
 ###########################
 # Create a selection of donors that should have been deferred at donation i but did donate 
 # at least i times
-def<-5
-i<-7
+def<-5 # to be set by the USER 
+i<-7   # to be set by the USER 
 # Nr of donors that fit the criterion
 eval(parse(text=paste0("sum(MeanHb",def,"+d/sqrt(",def,")<th & Hb",def,">th & !is.na(Hb",i,"))")))
-# set selection of donors
-eval(parse(text=paste0("selID<-KeyID[MeanHb",def,"+d/sqrt(",def,")<th & Hb",def,">th & !is.na(Hb",i,")]")))
-# plot the donor profile in a matrix
-if(plot_to_pdf) pdf(file=paste0("Deferral at donation ",def,", minimum of ",i," donations.pdf"))
-plotmatrix(selID, 2, ylim=c(70,160))
-if(plot_to_pdf) dev.off()
-
+if (eval(parse(text=paste0("sum(MeanHb",def,"+d/sqrt(",def,")<th & Hb",def,">th & !is.na(Hb",i,"))")))>0) {
+  # set selection of donors
+  eval(parse(text=paste0("selID<-KeyID[MeanHb",def,"+d/sqrt(",def,")<th & Hb",def,">th & !is.na(Hb",i,")]")))
+  # plot the donor profile in a matrix
+  if(plot_to_pdf) pdf(file=paste0("Deferral at donation ",def,", minimum of ",i," donations.pdf"))
+  plotmatrix(selID, 2, ylim=c(70,160))
+  if(plot_to_pdf) dev.off()
+}
 ###########################
 # select donors with ndef deferrals at donation i and an average Hb level above the threshold
-i<-30
-ndef<-10
+i<-30     # to be set by the USER 
+ndef<-10  # to be set by the USER 
 # Nr of donors selected
 eval(parse(text=paste0("sum( nHb",i,"-HbOk",i,">",ndef-1," & MeanHb",i,">th )")))
-# set selection of donors
-eval(parse(text=paste0("selID<-KeyID[nHb",i,"-HbOk",i,">",ndef-1," & MeanHb",i,">th]")))
-# plot the donor profile in a matrix
-if(plot_to_pdf) pdf(file=paste0("Deferral at ",i,", but with an average Hb level above the threshold.pdf"))
-plotmatrix(selID, 2)
-if(plot_to_pdf) dev.off()
-
+if(eval(parse(text=paste0("sum( nHb",i,"-HbOk",i,">",ndef-1," & MeanHb",i,">th )")))>0){
+  # set selection of donors
+  eval(parse(text=paste0("selID<-KeyID[nHb",i,"-HbOk",i,">",ndef-1," & MeanHb",i,">th]")))
+  # plot the donor profile in a matrix
+  if(plot_to_pdf) pdf(file=paste0("Deferral at ",i,", but with an average Hb level above the threshold.pdf"))
+  plotmatrix(selID, 2)
+  if(plot_to_pdf) dev.off()
+}
 ###########################
 # Create a selection of donors that were deferred at donation i but have 
 # an average Hb level well above (a value "delta") the deferral threshold
-i<-30
-delta<-5
+i<-30    # to be set by the USER 
+delta<-5 # to be set by the USER 
 # Nr of donors selected
 eval(parse(text=paste0("sum(MeanHb",i,">th+delta & Hb",i,"<th & !is.na(Hb",i,"))")))
-# set selection of donors
-eval(parse(text=paste0("selID<-KeyID[MeanHb",i,">th+delta & Hb",i,"<th & !is.na(Hb",i,")]")))
-# plot the donor profile in a matrix
-if(plot_to_pdf) pdf(file=paste0("Deferral at ",i,", but with an average of ",delta," above the threshold.pdf"))
-plotmatrix(selID, 2)
-if(plot_to_pdf) dev.off()
-# plot another subset
-plotmatrix(selID, 2, seedvalue=2)
-
+if (eval(parse(text=paste0("sum(MeanHb",i,">th+delta & Hb",i,"<th & !is.na(Hb",i,"))")))>0){
+  # set selection of donors
+  eval(parse(text=paste0("selID<-KeyID[MeanHb",i,">th+delta & Hb",i,"<th & !is.na(Hb",i,")]")))
+  # plot the donor profile in a matrix
+  if(plot_to_pdf) pdf(file=paste0("Deferral at ",i,", but with an average of ",delta," above the threshold.pdf"))
+  plotmatrix(selID, 2)
+  if(plot_to_pdf) dev.off()
+  # plot another subset
+  plotmatrix(selID, 2, seedvalue=2)
+}
