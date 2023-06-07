@@ -35,7 +35,7 @@ round(135*0.06206,1) # 8.4 mmol/L
 round(125*0.06206,1) # 7.8 mmol/L
 
 # Is a change in anonymous donor IDs required?
-changeIDs<-F # to be set by the USER 
+changeIDs<-T # to be set by the USER 
 
 # Set deferral percentile level
 cutoffperc<-0.99 # to be set by the USER 
