@@ -18,6 +18,10 @@ FileToUse<-"testdata.RDS" # to be set by the USER
 # DonDate : date of donation (Date)
 # Hb      : donor Hb at donation date (numeric)
 
+# parameter to determine whether the plots go to a pdf file or to screen.
+plot_to_pdf<-T # to be set by the USER 
+
+
 # All relevant input and output information is stored in the "tosave" variable
 # This information is stored in a file called "SavedDeferralData_DD-MM-YYYY.RDS"
 
@@ -141,8 +145,14 @@ adata$Group.1<-NULL
 colnames(adata)<-c("Hb", "sd", "Sex", "Nrdon")
 
 # calculate distributions for various subsets of nr of donations
+
+if(plot_to_pdf) pdf(file="Hb_distribution_male.pdf")
 malefits  <-fitHbdistributions(adata[adata$Sex=="M",],nrofquantiles=20)
+if(plot_to_pdf) dev.off()
+
+if(plot_to_pdf) pdf(file="Hb_distribution_female.pdf")
 femalefits<-fitHbdistributions(adata[adata$Sex=="F",],nrofquantiles=20)
+if(plot_to_pdf) dev.off()
 
 # stop execution of groupsize is larger than required by the user
 if(malefits$minsubset<mingroupsize | femalefits$minsubset<mingroupsize) {
@@ -186,18 +196,22 @@ tosave<-append(tosave, list(deff=deff))
 
 # plot deferrals per year
 maxdef<-max(c(proportions(defm, margin=1)[,2],proportions(deff, margin=1)[,2]))
+if(plot_to_pdf) pdf(file="Deferrals_per_year.pdf")
 plot(rownames(defm), proportions(defm, margin=1)[,2], ylim=c(0,maxdef*1.2), col="blue", type="l",
      ylab="Proportion deferred", xlab="Year")
 lines(rownames(deff), proportions(deff, margin=1)[,2], col="red")
 points(rownames(defm), proportions(defm, margin=1)[,2], pch=1, col="blue")
 points(rownames(deff), proportions(deff, margin=1)[,2], pch=2, col="red")
 legend("topright", c("Males", "Females"), pch=c(1,2), lty=c(1,1), col=c("blue","red"))
+if(plot_to_pdf) dev.off()
 
+if(plot_to_pdf) pdf(file="Distribution_of_donation_counts.pdf")
 # plot distribution of number of donations per sex
 with(data[data$Sex=="F",], plot(as.numeric(table(numdons)), type="l", col="red", xlim=c(1,maxDons),# log='y',
                                 xlab="Number of donations", ylab="number of donors"))
 with(data[data$Sex=="M",], lines(as.numeric(table(numdons)), type="l", col="blue"))
 legend("topright", c("Males", "Females"), lty=c(1,1), col=c("blue","red"))
+if(plot_to_pdf) dev.off()
 
 ##################################
 # Estimate measurement variation
@@ -231,6 +245,7 @@ set.seed(1)
 self<-which(data$Sex=="F" & data$dt>=intervaltoshow[1] & !is.na(data$ldt))
 sel<-sample(self, nrtoprint, replace=F)
 sel<-sel[order(data$dt[sel])]
+if(plot_to_pdf) pdf(file="Change_in_Hb_level_by_interval_female.pdf")
 with(data[sel,], plot(dt, dHb, col="red", log="x", xlim=intervaltoshow, ylim=ylim,
      xlab="Days between donations", ylab="Change in Hb level [g/L]"))
 abline(h=0,col=8)
@@ -242,6 +257,7 @@ summary(linfitf)
 cx<-as.data.frame(log10(intervaltoshow))
 colnames(cx)<-"ldt"
 lines(intervaltoshow, predict(linfitf,cx), lwd=2)
+if(plot_to_pdf) dev.off()
 mean(data$Hb[self])   
 sd(data$Hb[self])     
 sd(data$dHb[self])    
@@ -258,6 +274,7 @@ set.seed(1)
 selm<-which(data$Sex=="M" & data$dt>=intervaltoshow[1] & !is.na(data$ldt))
 sel<-sample(selm, nrtoprint, replace=F)
 sel<-sel[order(data$dt[sel])]
+if(plot_to_pdf) pdf(file="Change_in_Hb_level_by_interval_male.pdf")
 with(data[sel,], plot(dt, dHb, col="blue", log="x", xlim=intervaltoshow, ylim=ylim,
                       xlab="Days between donations", ylab="Change in Hb level [g/L]"))
 abline(h=0,col=8)
@@ -267,10 +284,13 @@ with(data[sel,], lines(dt, rollmean(dHb, rollmeanWidth, fill = list(NA, NULL, NA
 linfitm<-lm(dHb~ldt, data=data[selm,])
 summary(linfitm)
 lines(intervaltoshow, predict(linfitm,cx), lwd=2)
+
+if(plot_to_pdf) dev.off()
 mean(data$Hb[selm])   
 sd(data$Hb[selm])     
 sd(data$dHb[selm])    
 sd(linfitm$residuals) 
+
 
 # save info
 tosave<-append(tosave, list(coefm=linfitm$coefficients))
@@ -512,12 +532,9 @@ sms3[8]/totn3   # Reviewed for low relative Hb
 # for internal use only
 # note that the number of 
 
-maxplots<-4  # USER: Set the maximum number of graphs to plot in row/column of a matrix
+maxplots<-3  # USER: Set the maximum number of graphs to plot in row/column of a matrix
 # plotdonorprofile(KeyID[250], leg=T, ylim=c(0,190)) # nice illustration with a range of 10 unnecessary deferrals 
 # plotdonorprofile(KeyID[250], ylim=c(75,210)) # nice illustration with a range of 10 unnecessary deferrals 
-
-# parameter to determine whether the plots go to a pdf file or to screen.
-plot_to_pdf<-F # to be set by the USER 
 
 ###########################
 # Create a selection of donors that should have been deferred at donation 'def' but did donate 
@@ -531,8 +548,8 @@ if (eval(parse(text=paste0("sum(MeanHb",def,"+d/sqrt(",def,")<th & Hb",def,">th 
   eval(parse(text=paste0("selID<-KeyID[MeanHb",def,"+d/sqrt(",def,")<th & Hb",def,">th & !is.na(Hb",n,")]")))
   print(selID)
   # plot the donor profile in a matrix
-  if(plot_to_pdf) pdf(file=paste0("Deferral at donation ",def,", minimum of ",n," donations.pdf"))
-  plotmatrix(selID, 2, ylim=c(70,160))
+  if(plot_to_pdf) pdf(file=gsub(" ","_",paste0("Deferral at donation ",def," minimum of ",n," donations.pdf")))
+  plotmatrix(selID,maxplots=maxplots, ylim=c(70,160),)
   if(plot_to_pdf) dev.off()
 }
 ###########################
@@ -546,8 +563,8 @@ if(eval(parse(text=paste0("sum( nHb",n,"-HbOk",n,">",ndef-1," & MeanHb",n,">th &
   eval(parse(text=paste0("selID<-KeyID[nHb",n,"-HbOk",n,">",ndef-1," & MeanHb",n,">th& !is.na(Hb",n,")]")))
   print(selID)
   # plot the donor profile in a matrix
-  if(plot_to_pdf) pdf(file=paste0("Deferral at ",n,", but with an average Hb level above the threshold.pdf"))
-  plotmatrix(selID, 2)
+  if(plot_to_pdf) pdf(file=gsub(" ","_",paste0("Deferral at ",n,", but with an average Hb level above the threshold.pdf")))
+  plotmatrix(selID,maxplots=maxplots)
   if(plot_to_pdf) dev.off()
 }
 ###########################
@@ -562,9 +579,9 @@ if (eval(parse(text=paste0("sum(MeanHb",n,">th+delta & Hb",n,"<th & !is.na(Hb",n
   eval(parse(text=paste0("selID<-KeyID[MeanHb",n,">th+delta & Hb",n,"<th & !is.na(Hb",n,")]")))
   print(selID)
   # plot the donor profile in a matrix
-  if(plot_to_pdf) pdf(file=paste0("Deferral at ",n,", but with an average of ",delta," above the threshold.pdf"))
-  plotmatrix(selID, 3)
+  if(plot_to_pdf) pdf(file=gsub(" ","_",paste0("Deferral at ",n," but with an average of ",delta," above the threshold.pdf")))
+  plotmatrix(selID, maxplots=maxplots)
   if(plot_to_pdf) dev.off()
   # plot another subset
-  plotmatrix(selID, 2, seedvalue=2)
+  # plotmatrix(selID, 2, seedvalue=2)
 }
