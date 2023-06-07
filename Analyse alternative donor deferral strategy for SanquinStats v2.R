@@ -145,7 +145,7 @@ malefits  <-fitHbdistributions(adata[adata$Sex=="M",],nrofquantiles=20)
 femalefits<-fitHbdistributions(adata[adata$Sex=="F",],nrofquantiles=20)
 
 # stop execution of groupsize is larger than required by the user
-if(malefits$minsubset<mingroupsize | malefits$minsubset<mingroupsize) {
+if(malefits$minsubset<mingroupsize | femalefits$minsubset<mingroupsize) {
   print("Code stopped because aggregated group size is smaller than specified by the user")
   print("Please decrease the nrofquantiles parameter in the fitHbdistributions functions (line 144/145)")
   print("or increase the mingroupsize (line 44)")
