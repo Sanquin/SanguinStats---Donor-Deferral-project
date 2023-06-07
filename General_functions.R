@@ -10,8 +10,12 @@ plotdonorprofile<-function(Sel_ID, leg=F, ylim=c(0,200)) {
 
   x<-data[data$KeyID%in%Sel_ID,]$DonDate
   y<-data[data$KeyID%in%Sel_ID,]$Hb
+  #Add some random days to date
+  x_plot <- x + sample(6,length(x),replace = TRUE) - 3
+  # Add a little bit of jitter to Hb 
+  y_plot <- jitter(y)
   main<-paste0("Donor ID = ",Sel_ID," (",ifelse(Sex[KeyID==Sel_ID]=="M", "Male", "Female"),")")
-  plot(x, y, type="l", ylim=ylim, ylab="Haemoglobin level [g/L]", xlab="Time [Years]", main=main)
+  plot(x_plot, y_plot, type="l", ylim=ylim, ylab="Haemoglobin level [g/L]", xlab="Time [Years]", main=main)
   
   # calculate updating mean values
   my<-c()
@@ -77,18 +81,18 @@ plotdonorprofile<-function(Sel_ID, leg=F, ylim=c(0,200)) {
   # mark donations
   sp<- y>=th[KeyID%in%Sel_ID]
   sp[1]<-F
-  points(x[sp], y[sp], pch=16)
+  points(x_plot[sp], y_plot[sp], pch=16)
   # mark unnecessary donations
   sp<- y<th[KeyID%in%Sel_ID] & y>=lyt2
   sp[1]<-F
-  points(x[sp], y[sp])
+  points(x_plot[sp], y_plot[sp])
   # mark deferrals 
   sp<- y<lyt2
-  #    points(x[sp], y[sp], pch=15)
-  points(x[sp], y[sp], pch=0)										
+  #    points(x_plot[sp], y[sp], pch=15)
+  points(x_plot[sp], y_plot[sp], pch=0)										
 
-  #  points(x[1], y[1], col=0, pch=16)
-  points(x[1], y[1], pch=8)
+  #  points(x_plot[1], x_plot[1], col=0, pch=16)
+  points(x_plot[1], y_plot[1], pch=8)
   
   if (leg) {
     cutoffperc2<-1-(1-cutoffperc)*2
