@@ -214,5 +214,5 @@ fitHbdistributions<-function(data, nrofquantiles=20) {
   }
   par(mfrow=c(1,1))
   print(paste("minimum subset size:", minsubset))
-  return(list(Hbdistr=Hbdistr, Hbsddistr=Hbsddistr))
+  return(list(Hbdistr=Hbdistr, Hbsddistr=Hbsddistr,minsubset=minsubset))
 }
