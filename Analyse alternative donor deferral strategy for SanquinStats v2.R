@@ -134,6 +134,13 @@ if (changeIDs) {
 # calculate distribution of nr of donations per donor
 table(data$numdons, data$Sex) 
 
+# convert Hb levels if so required
+if (!Hb_in_gpl){
+  dtm<-dtm/0.06206 -1e-6 # subtract a small margin to compensate for rounding errors
+  dtf<-dtf/0.06206 -1e-6
+  data$Hb<-data$Hb/0.06206
+}
+
 # calculate sex, mean Hb, Sd and nr of donations per donor
 meanHb<-aggregate(data$Hb, by=list(data$KeyID), mean)
 SdHb<-aggregate(data$Hb, by=list(data$KeyID), sd)
@@ -170,13 +177,6 @@ tosave<-append(tosave, list(malefits=malefits))
 tosave<-append(tosave, list(femalefits=femalefits))
 tosave<-append(tosave, list(maxDons=maxDons))
 
-# convert Hb levels if so required
-if (!Hb_in_gpl){
-  dtm<-dtm/0.06206 -1e-6 # subtract a small margin to compensate for rounding errors
-  dtf<-dtf/0.06206 -1e-6
-  data$Hb<-data$Hb/0.06206
-}
-
 # Set indicator for deferral
 data$def<-ifelse(data$Hb<dtf,1,0)
 data$def[data$Sex=="M"]<-ifelse(data$Hb[data$Sex=="M"]<dtm,1,0)
@@ -207,10 +207,12 @@ if(plot_to_pdf) dev.off()
 
 if(plot_to_pdf) pdf(file="Distribution_of_donation_counts.pdf")
 # plot distribution of number of donations per sex
-with(data[data$Sex=="F",], plot(as.numeric(table(numdons)), type="l", col="red", xlim=c(1,maxDons),# log='y',
+with(data[data$Sex=="F",], plot(as.numeric(table(numdons)), type="l", col="red", xlim=c(1,maxDons), log='y',
                                 xlab="Number of donations", ylab="number of donors"))
 with(data[data$Sex=="M",], lines(as.numeric(table(numdons)), type="l", col="blue"))
-legend("topright", c("Males", "Females"), lty=c(1,1), col=c("blue","red"))
+with(data[data$Sex=="M",], points(as.numeric(table(numdons)), pch=1, col="blue"))
+with(data[data$Sex=="F",], points(as.numeric(table(numdons)), pch=2, col="red"))
+legend("topright", c("Males", "Females"), pch=c(1,2), lty=c(1,1), col=c("blue","red"))
 if(plot_to_pdf) dev.off()
 
 ##################################
@@ -234,7 +236,7 @@ data$dHb<-NA
 data$dHb<-data$Hb-data$Hb[precursor]
 data$dHb[data$KeyID != data$KeyID[precursor]]<-NA
 
-# set plot parameters
+# set plot parameters # to be set by the USER 
 intervaltoshow<-c(100, 730) # time interval to show
 ylim<-c(-40, 40)           # interval in dHb to show
 nrtoprint<-15000           # nr of observations to select for printing
@@ -246,7 +248,7 @@ self<-which(data$Sex=="F" & data$dt>=intervaltoshow[1] & !is.na(data$ldt))
 sel<-sample(self, nrtoprint, replace=F)
 sel<-sel[order(data$dt[sel])]
 if(plot_to_pdf) pdf(file="Change_in_Hb_level_by_interval_female.pdf")
-with(data[sel,], plot(dt, dHb, col="red", log="x", xlim=intervaltoshow, ylim=ylim,
+with(data[sel,], plot(dt, jitter(dHb, amount=.5), col="red", log="x", xlim=intervaltoshow, ylim=ylim,
      xlab="Days between donations", ylab="Change in Hb level [g/L]"))
 abline(h=0,col=8)
 # add rolling mean
@@ -275,7 +277,7 @@ selm<-which(data$Sex=="M" & data$dt>=intervaltoshow[1] & !is.na(data$ldt))
 sel<-sample(selm, nrtoprint, replace=F)
 sel<-sel[order(data$dt[sel])]
 if(plot_to_pdf) pdf(file="Change_in_Hb_level_by_interval_male.pdf")
-with(data[sel,], plot(dt, dHb, col="blue", log="x", xlim=intervaltoshow, ylim=ylim,
+with(data[sel,], plot(dt, jitter(dHb, amount=.5), col="blue", log="x", xlim=intervaltoshow, ylim=ylim,
                       xlab="Days between donations", ylab="Change in Hb level [g/L]"))
 abline(h=0,col=8)
 # add rolling mean
