@@ -12,18 +12,18 @@ cat("\014")
 
 # set name of the datafile to use
 FileToUse<-"testdata.RDS" # to be set by the USER 
+
 # "FileToUSe" should contain the following data columns (data type in brackets):
 # KeyID   : Unique identifier for each donor (integer)
 # Sex     : indicator for Male (M) or Female (F) donor (factor)
 # DonDate : date of donation (Date)
 # Hb      : donor Hb at donation date (numeric)
 
-# parameter to determine whether the plots go to a pdf file or to screen.
-plot_to_pdf<-T # to be set by the USER 
-
-
 # All relevant input and output information is stored in the "tosave" variable
 # This information is stored in a file called "SavedDeferralData_DD-MM-YYYY.RDS"
+
+# parameter to determine whether the plots go to a pdf file or to screen.
+plot_to_pdf<-F # to be set by the USER 
 
 # Set minimum acceptable Hb levels for males and females
 dtm<-8.4  # to be set by the USER 
@@ -154,10 +154,12 @@ colnames(adata)<-c("Hb", "sd", "Sex", "Nrdon")
 # calculate distributions for various subsets of nr of donations
 
 if(plot_to_pdf) pdf(file="Hb_distribution_male.pdf")
+# nrofquantiles are to be set by the USER 
 malefits  <-fitHbdistributions(adata[adata$Sex=="M",],nrofquantiles=20)
 if(plot_to_pdf) dev.off()
 
 if(plot_to_pdf) pdf(file="Hb_distribution_female.pdf")
+# nrofquantiles are to be set by the USER 
 femalefits<-fitHbdistributions(adata[adata$Sex=="F",],nrofquantiles=20)
 if(plot_to_pdf) dev.off()
 
