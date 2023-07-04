@@ -165,8 +165,11 @@ fitHbdistributions<-function(data, nrofquantiles=20) {
   
   quantiles <- quantile(data$Nrdon, prob = seq(0, 1, length = nrofquantiles+1), type = 5)
   data$cutted <- cut2(data$Nrdon, cuts = unique(as.numeric(quantiles)))
+  
+  levelsn<-sort(unique(as.numeric(data$cutted)))
   nrsplits<-length(levels(data$cutted))
-  hist(as.numeric(data$cutted))
+  hist(as.numeric(data$cutted), xaxt = "n", main="Number of donations per cluster", xlab="Cluster of number of donations", breaks=c(levelsn-.5, max(levelsn)+.5))
+  axis(1, at = sort(unique(as.numeric(data$cutted))), labels = levels(data$cutted))
   sum(table(data$Nrdon))
   nrobs<-table(data$cutted, useNA="always")
   print(nrobs)
@@ -186,7 +189,7 @@ fitHbdistributions<-function(data, nrofquantiles=20) {
     spl <- with(de, smooth.spline(x, s, df = 25))
     
     normfit<-fitdist(data$Hb[data$cutted==levels(data$cutted)[i]], 'norm')
-    denscomp(normfit)
+    denscomp(normfit, xlab="Hb g/L", main=paste0("Mean Hb for n=", levels(data$cutted)[i]))
     lines(de$x,de$Hb)
     spl <- with(de,smooth.spline(x, s, df = 40))
     lines(predict(spl, de$x, deriv = 1), col = "blue")
@@ -207,7 +210,7 @@ fitHbdistributions<-function(data, nrofquantiles=20) {
       spl <- with(de,smooth.spline(x, s, df = 25))
       
       normfit<-fitdist(dat, 'norm')
-      denscomp(normfit)
+      denscomp(normfit, xlab="Hb g/L", main=paste0("Hb Sd for n=", levels(data$cutted)[i]))
       lines(de$x,de$y)
       spl <- with(de,smooth.spline(x, s, df = 40))
       lines(predict(spl, de$x, deriv = 1), col = "blue")
