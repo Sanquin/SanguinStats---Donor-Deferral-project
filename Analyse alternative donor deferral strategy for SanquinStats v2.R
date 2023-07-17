@@ -95,10 +95,6 @@ tosave<-append(tosave, list(daterange=daterange))
 sum(is.na(data$Hb))
 data<-data[!is.na(data$Hb),]
 nrrecs<-c(nrrecs,nrow(data))
-data<-data[data$Hb>5,]
-nrrecs<-c(nrrecs,nrow(data))
-data<-data[data$Hb<15,]
-nrrecs<-c(nrrecs,nrow(data))
 
 data<-data[!is.na(data$KeyID),]
 nrrecs<-c(nrrecs,nrow(data))
