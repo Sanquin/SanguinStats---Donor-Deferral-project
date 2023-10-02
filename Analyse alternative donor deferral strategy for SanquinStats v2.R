@@ -6,6 +6,9 @@ rm(list=ls())
 while (!is.null(dev.list())) dev.off()
 cat("\014")  
 
+# Set code date 
+maincodedatestamp<-"20231002"
+
 #############################
 # Define user input
 #############################
@@ -74,6 +77,11 @@ source("General_functions.R")
 # but first write some of the input data to the tosave variable
 # the first item is the name of the datafile used for the analyses
 tosave<-list(FileToUse=FileToUse)
+
+# save code datestamps
+tosave<-append(tosave, list(maincodedatestamp=maincodedatestamp))
+tosave<-append(tosave, list(generalfunctionscodedatestamp=generalfunctionscodedatestamp))
+
 # save cutoff percentage applied
 tosave<-append(tosave, list(cutoffperc=cutoffperc))
 
