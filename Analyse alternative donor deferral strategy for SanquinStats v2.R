@@ -394,8 +394,8 @@ if(!file.exists("donations_analysis_data.RDS")){
 ############################
 
 # standard deviation of individual measurements
-(malesd<-sd(linfitm$residuals))   
-(femalesd<-sd(linfitf$residuals)) 
+(malesd<-sd(linfitm$residuals)/sqrt(2))
+(femalesd<-sd(linfitf$residuals)/sqrt(2))
 
 # Calculate (un)acceptable deviation per sex
 datt$d<-qnorm(cutoffperc)*femalesd
