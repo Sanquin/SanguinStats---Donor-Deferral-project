@@ -2,6 +2,9 @@
 # General functions 
 ###########################################
 
+# Set code date timestamp
+generalfunctionscodedatestamp<-"20231002"
+
 # function that plots the donation profile of an individual donor
 plotdonorprofile<-function(Sel_ID, leg=F, ylim=c(0,200)) {
   # Sel_ID = KeyID of the donor to print
