@@ -502,6 +502,9 @@ maxplots<-3  # USER: Set the maximum number of graphs to plot in row/column of a
 # plotdonorprofile(KeyID[250], leg=T, ylim=c(0,190)) # nice illustration with a range of 10 unnecessary deferrals 
 # plotdonorprofile(KeyID[250], ylim=c(75,210)) # nice illustration with a range of 10 unnecessary deferrals 
 
+# for plotting datt dataset needs to be attached
+attach(datt)
+
 ###########################
 # Create a selection of donors that should have been deferred at donation 'def' but did donate 
 # at least n times
