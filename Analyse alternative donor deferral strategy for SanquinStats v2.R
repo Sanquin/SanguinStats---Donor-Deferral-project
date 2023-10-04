@@ -6,8 +6,13 @@ rm(list=ls())
 while (!is.null(dev.list())) dev.off()
 cat("\014")  
 
+# set the working path
+library(this.path)
+setwd(this.dir()) # set the active working directory to the directory of this file
+getwd()
+
 # Set code date 
-maincodedatestamp<-"20231002"
+maincodedatestamp<-"20231004"
 
 #############################
 # Define user input
@@ -170,8 +175,8 @@ if(plot_to_pdf) dev.off()
 # stop execution of groupsize is larger than required by the user
 if(malefits$minsubset<mingroupsize | femalefits$minsubset<mingroupsize) {
   print("Code stopped because aggregated group size is smaller than specified by the user")
-  print("Please decrease the nrofquantiles parameter in the fitHbdistributions functions (line 144/145)")
-  print("or increase the mingroupsize (line 44)")
+  print("Please decrease the nrofquantiles parameter in the fitHbdistributions functions (line 167/172)")
+  print("or increase the mingroupsize (line 56)")
   stop("Change analysis code")
 }
 
@@ -412,81 +417,35 @@ datt$d[datt$Sex=="M"]<-qnorm(cutoffperc)*malesd
 datt$th<-dtf
 datt$th[datt$Sex=="M"]<-dtm
 table(datt$th-datt$d, datt$Sex)
-# 95% Thresholds: 109.619737077851 (F) 119.111266716166 (M)
-# 99% Thresholds: 103.247400641088 (F) 112.528261305199 (M)
-
-# attach the datt file
-while ("datt" %in% search()) detach(datt)
-attach(datt)
 
 ###################################################################
 # now analyse what the new donor deferral policy would achieve 
 # in terms of number of donors now allowed to donate
 ###################################################################
-# define an output array with 8 columns, one row per subsequent donation
-# the items stored in each row is explained below
-outputsummarytable<-as.data.frame(matrix(0,maxDons,8))
-colnames(outputsummarytable)<-c("Deferred", "Non-deferred", "ShouldNotDeferred", "ShouldNotDonate", 
-        "Should_not_have_donated","Missed_by_stopped_donor", "ShouldNotDeferred2", "RequiresReview")
 
-stopped<-rep(F, length(Hb1)) # indicator for whether a donors has stopped or not
-                             # is set when the mean Hb level was demonstrably below 
-                             # the eligibility threshold at previous donation 
-stopped2<-rep(F, length(Hb1)) # indicator for whether a donors has stopped or not
-                              # is set when the mean Hb level is below the 
-                              # eligibility threshold at previous donation
-stopafter<-3 # stop donating after significant evidence only after stopafter donations have been made
+# detach potentially attached objects
+while ("datt" %in% search()) detach(datt)
+while ("dattf" %in% search()) detach(dattf)
+while ("dattm" %in% search()) detach(dattm)
 
-for (i in 1:maxDons ){
-  
-  # 1 - Deferred donors
-  # The number of donors deferred at step i are those with a Hb value that is  
-  # below the deferral threshold
-  eval(parse(text=paste0("outputsummarytable[",i,", 1]<-sum(!is.na(Hb",i,") & Hb",i,"<th)")))
-  
-  # 2 - non-Deferred donors
-  # The number of donors not deferred at step i are those with a Hb value that   
-  # is equal or larger than the deferral threshold
-  eval(parse(text=paste0("outputsummarytable[",i,", 2]<-sum(!is.na(Hb",i,") & Hb",i,">=th)")))
-  
-  # 3 - Donors that should not have been deferred as the Hb deviation relative to
-  #     their mean Hb value does not provide sufficient evidence against donation
-  # only count events from second donation onwards
-  if(i>1) eval(parse(text=paste0("outputsummarytable[",i,", 3]<-sum(!is.na(Hb",i,") & Hb",i,"<th & Hb",i,">=MeanHb",i-1,"-d)")))
+# attach the datt file to enable analysis of policy impact
+attach(datt)
+analysisresults<-AnalysePolicyImpact()
+outputsummarytable<-analysisresults$outputsummarytable
+tosave<-append(tosave, list(analysisresults=analysisresults))
+while ("datt" %in% search()) detach(datt)
 
-  # 4 - Donors that should not donate as their Hb is demonstrably below the eligibility threshold
-  eval(parse(text=paste0("outputsummarytable[",i,",4]<-sum(!is.na(Hb",i,") & MeanHb",i,"<th-d/sqrt(",i,"))")))
-  
-  # 5 - Donors that should not have donated
-  if(i>1) eval(parse(text=paste0("outputsummarytable[",i,",5]<-sum(!is.na(Hb",i,") & MeanHb",i-1,"<th-d/sqrt(",i-1,") & Hb",i,">=th)")))
-  
-  # set new index for (previously) stopped donors
-  # index stopped indicates that the mean Hb level was demonstrably below the eligibility threshold at previous donation 
-  if (i>stopafter) eval(parse(text=paste0("stopped <-stopped  | (!is.na(Hb",i,") & MeanHb",i-1,"<th-d/sqrt(",i-1,"))")))
-  # index stopped2 indicates that the mean Hb level is below the eligibility threshold at previous donation
-  if (i>stopafter) eval(parse(text=paste0("stopped2<-stopped2 | (!is.na(Hb",i,") & MeanHb",i-1,"<th)")))
+dattf<-datt[datt$Sex=="F",]
+attach(dattf)
+analysisresults_f<-AnalysePolicyImpact()
+tosave<-append(tosave, list(analysisresults_f=analysisresults_f))
+while ("dattf" %in% search()) detach(dattf)
 
-  # 6 - donations missed as a result of new deferral rule
-  eval(parse(text=paste0("outputsummarytable[",i,",6]<-sum(!is.na(Hb",i,") & Hb",i,">=th & stopped)")))
-  
-  # 7 - Donors that should not have been deferred as the Hb deviation relative to 
-  #     the absolute Hb threshold is insufficient (see also evaluation 3 above)
-  # this basically presumes that anyone with a Hb level over th-d may donate
-  eval(parse(text=        paste0("outputsummarytable[",i,", 7]<-sum(!is.na(Hb",i,") & Hb",i,"<th & Hb",i,">=th-d)")))
-  
-  # 8 - Identified as outlier, but not deferred
-  if(i>1) eval(parse(text=paste0("outputsummarytable[",i,",8]<-sum(!is.na(Hb",i,") & Hb",i,"< MeanHb",i-1,"-d & Hb",i,">=th)")))
-}
-sum(stopped) 
-sum(stopped2)
-
-sum(stopped)/length(stopped) # proportion of stopped donors
-sum(stopped2)/length(stopped) # proportion of stopped2 donors
-
-outputsummarytable$defprop<-outputsummarytable$Deferred/(outputsummarytable$Deferred+outputsummarytable$`Non-deferred`)
-outputsummarytable$nondefprop<-outputsummarytable$ShouldNotDeferred/outputsummarytable$Deferred
-outputsummarytable
-tosave<-append(tosave, list(outputsummarytable=outputsummarytable))
+dattm<-datt[datt$Sex=="M",]
+attach(dattm)
+analysisresults_m<-AnalysePolicyImpact()
+tosave<-append(tosave, list(analysisresults_m=analysisresults_m))
+while ("dattm" %in% search()) detach(dattm)
 
 ###################################################################
 # Write tosave data to datafile
@@ -537,8 +496,7 @@ sms3[8]/totn3   # Reviewed for low relative Hb
 #######################################################
 # plot some individual donor profiles
 #######################################################
-# for internal use only
-# note that the number of 
+# FOR INTERNAL USE ONLY
 
 maxplots<-3  # USER: Set the maximum number of graphs to plot in row/column of a matrix
 # plotdonorprofile(KeyID[250], leg=T, ylim=c(0,190)) # nice illustration with a range of 10 unnecessary deferrals 
