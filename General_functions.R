@@ -243,7 +243,7 @@ AnalysePolicyImpact<-function(){
   stopped2<-rep(F, length(Hb1)) # indicator for whether a donors has stopped or not
   # is set when the mean Hb level is below the 
   # eligibility threshold at previous donation
-  stopafter<-3 # stop donating after significant evidence only after stopafter donations have been made
+  stopafter<<-3 # stop donating after significant evidence only after stopafter donations have been made, is required globally
   
   for (i in 1:maxDons ){
     
