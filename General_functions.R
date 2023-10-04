@@ -3,7 +3,7 @@
 ###########################################
 
 # Set code date timestamp
-generalfunctionscodedatestamp<-"20231002"
+generalfunctionscodedatestamp<-"20231004"
 
 # function that plots the donation profile of an individual donor
 plotdonorprofile<-function(Sel_ID, leg=F, ylim=c(0,200)) {
@@ -225,4 +225,74 @@ fitHbdistributions<-function(data, nrofquantiles=20) {
   par(mfrow=c(1,1))
   print(paste("minimum subset size:", minsubset))
   return(list(Hbdistr=Hbdistr, Hbsddistr=Hbsddistr,minsubset=minsubset))
+}
+
+AnalysePolicyImpact<-function(){
+  # function that analyses the policy impact for a dataset datt containing aggregated donation and Hb data per donor per donation
+  
+  # define an output array with 8 columns, one row per subsequent donation
+  # the items that are stored in per column are explained below
+
+  outputsummarytable<-as.data.frame(matrix(0,maxDons,8))
+  colnames(outputsummarytable)<-c("Deferred", "Non-deferred", "ShouldNotDeferred", "ShouldNotDonate", 
+                                  "Should_not_have_donated","Missed_by_stopped_donor", "ShouldNotDeferred2", "RequiresReview")
+  
+  stopped<-rep(F, length(Hb1)) # indicator for whether a donors has stopped or not
+  # is set when the mean Hb level was demonstrably below 
+  # the eligibility threshold at previous donation 
+  stopped2<-rep(F, length(Hb1)) # indicator for whether a donors has stopped or not
+  # is set when the mean Hb level is below the 
+  # eligibility threshold at previous donation
+  stopafter<-3 # stop donating after significant evidence only after stopafter donations have been made
+  
+  for (i in 1:maxDons ){
+    
+    # 1 - Deferred donors
+    # The number of donors deferred at step i are those with a Hb value that is  
+    # below the deferral threshold
+    eval(parse(text=paste0("outputsummarytable[",i,", 1]<-sum(!is.na(Hb",i,") & Hb",i,"<th)")))
+    
+    # 2 - non-Deferred donors
+    # The number of donors not deferred at step i are those with a Hb value that   
+    # is equal or larger than the deferral threshold
+    eval(parse(text=paste0("outputsummarytable[",i,", 2]<-sum(!is.na(Hb",i,") & Hb",i,">=th)")))
+    
+    # 3 - Donors that should not have been deferred as the Hb deviation relative to
+    #     their mean Hb value does not provide sufficient evidence against donation
+    # only count events from second donation onwards
+    if(i>1) eval(parse(text=paste0("outputsummarytable[",i,", 3]<-sum(!is.na(Hb",i,") & Hb",i,"<th & Hb",i,">=MeanHb",i-1,"-d)")))
+    
+    # 4 - Donors that should not donate as their Hb is demonstrably below the eligibility threshold
+    eval(parse(text=paste0("outputsummarytable[",i,",4]<-sum(!is.na(Hb",i,") & MeanHb",i,"<th-d/sqrt(",i,"))")))
+    
+    # 5 - Donors that should not have donated
+    if(i>1) eval(parse(text=paste0("outputsummarytable[",i,",5]<-sum(!is.na(Hb",i,") & MeanHb",i-1,"<th-d/sqrt(",i-1,") & Hb",i,">=th)")))
+    
+    # set new index for (previously) stopped donors
+    # index stopped indicates that the mean Hb level was demonstrably below the eligibility threshold at previous donation 
+    if (i>stopafter) eval(parse(text=paste0("stopped <-stopped  | (!is.na(Hb",i,") & MeanHb",i-1,"<th-d/sqrt(",i-1,"))")))
+    # index stopped2 indicates that the mean Hb level is below the eligibility threshold at previous donation
+    if (i>stopafter) eval(parse(text=paste0("stopped2<-stopped2 | (!is.na(Hb",i,") & MeanHb",i-1,"<th)")))
+    
+    # 6 - donations missed as a result of new deferral rule
+    eval(parse(text=paste0("outputsummarytable[",i,",6]<-sum(!is.na(Hb",i,") & Hb",i,">=th & stopped)")))
+    
+    # 7 - Donors that should not have been deferred as the Hb deviation relative to 
+    #     the absolute Hb threshold is insufficient (see also evaluation 3 above)
+    # this basically presumes that anyone with a Hb level over th-d may donate
+    eval(parse(text=        paste0("outputsummarytable[",i,", 7]<-sum(!is.na(Hb",i,") & Hb",i,"<th & Hb",i,">=th-d)")))
+    
+    # 8 - Identified as outlier, but not deferred
+    if(i>1) eval(parse(text=paste0("outputsummarytable[",i,",8]<-sum(!is.na(Hb",i,") & Hb",i,"< MeanHb",i-1,"-d & Hb",i,">=th)")))
+  }
+  sum(stopped) 
+  sum(stopped2)
+  
+  sum(stopped)/length(stopped) # proportion of stopped donors
+  sum(stopped2)/length(stopped) # proportion of stopped2 donors
+  
+  outputsummarytable$defprop<-outputsummarytable$Deferred/(outputsummarytable$Deferred+outputsummarytable$`Non-deferred`)
+  outputsummarytable$nondefprop<-outputsummarytable$ShouldNotDeferred/outputsummarytable$Deferred
+  return(list(outputsummarytable=outputsummarytable, stopped=stopped, stopped2=stopped2))
+  
 }
