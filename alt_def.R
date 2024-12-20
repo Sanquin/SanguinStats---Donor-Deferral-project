@@ -5,7 +5,7 @@ codeversion <- 20241210
 
 
 # The code is structed at follows:
-# 1. read in donation records from DATAFILE_NAME in FILE_DIR, this file should already be preprocessed to contain the correct column names 
+# 1. read in donation records from DATAFILE_NAME in FILE_DIR, this file should already be preprocessed to contain the correct column names (instruction for this?)
 #    this is done in the function read_data(), this takes a while because it needs to calculate the mean of all previous Hb measurements per donor
 #    a further preprocessed file is stored in FILE_DIR so that this does not need to be run again in the future
 # ... for each alpha_mean and alpha_outlier do:
@@ -15,12 +15,13 @@ codeversion <- 20241210
 #      the number of deferrals in both new and old algorithm
 # ...done
 # 4. merge the confusion matrices for each alpha_mean and alpha_outlier and save them to csv
-# 5. a few other population level characteristics are stored in a separate file (see word instructions for specifications)
+# 5. TODO: store a few data characterics in another file
 
 
 # These values need to be changed for each country
-FILE_DIR <- #datafile directory here (see word file with instructions)
-DATAFILE_NAME <- "fullhistory.rds" #or change to own file name
+FILE_DIR <- "/home/meule01a/Amber/Data/DonorDeferral/"
+#FILE_DIR <- "/mnt/c/Users/potha01m/data/alt_def/"
+DATAFILE_NAME <- "fullhistory.rds"
 
 datafile_name_withoutext <- gsub(".rds", "", DATAFILE_NAME)
 DATAFILE_NAME_PREPROCESSED <- paste0(datafile_name_withoutext, "_preprocessed.rds")
@@ -55,7 +56,7 @@ read_data <- function(file_path,
   # Also does prev_min_4, but this is not used by default
   cat("Reading file", file_path, "\n")
   df <- readRDS(file_path)
-  
+  # df$Hb <- df$Hb
   if (test) {
     df <- head(df, 10000)
   }
@@ -64,32 +65,36 @@ read_data <- function(file_path,
     arrange(KeyID, DonDate) %>%
     filter(!is.na(Hb))
   df <- test_deferral(df, out_colname = "def_true", Hb_test_col = "Hb")
-  
   print("Calculating prev means")
   # TODO: rolling mean optional?
+
+  #remove donors with 2 or fewer donations, because they don't have a prev mean anyway
+  df <- df %>% group_by(KeyID) %>% mutate(ndons=n()) %>% filter(ndons > 2)
+
   df <- df %>%
     group_by(KeyID) %>%
+    # arrange(DonDate) %>%
     mutate(
       nth_don = row_number(),
-      prev_Hb = lag(Hb),
-      mean_Hb = cumsum(Hb) / nth_don,
-      prev_mean_Hb = lag(mean_Hb),
+      prev_Hb = lag(Hb),#, order_by=DonDate),
+      mean_Hb = cummean(Hb),
+      prev_mean_Hb = lag(mean_Hb), 
+      # prev_mean_Hb = ifelse(is.na(prev_Hb), NA, cummean(prev_Hb)),
       mean_Hb_min_4 = rollapply(Hb, 4, mean,
-                                align = "right",
-                                fill = NA
+        align = "right",
+        fill = NA
       ),
       prev_mean_Hb_min_4 = rollapply(prev_Hb, 4, mean,
-                                     align = "right",
-                                     fill = NA
+        align = "right",
+        fill = NA
       ),
-    )
-  
+    ) 
   print("Calculating std dev of measurement (approx)")
   df <- df %>%
     group_by(Sex) %>%
     mutate(std_dev_meas = sd(Hb - prev_Hb,
-                             na.rm =
-                               T
+      na.rm =
+        T
     ) / sqrt(2)) %>%
     ungroup() %>%
     mutate(
@@ -98,7 +103,7 @@ read_data <- function(file_path,
       prev_mean_Hb_std = std_dev_meas / sqrt(nth_don - 1),
       prev_mean_Hb_min_4_std = std_dev_meas / sqrt(4)
     )
-  
+
   print(df %>% group_by(Sex) %>% summarise(stddev_meas = mean(std_dev_meas)))
   return(df)
 }
@@ -110,15 +115,17 @@ deferral_algorithm <- function(df,
                                cutoff_F = CUTOFF_F, verbose = T,
                                use_prev_4 = F) {
   # Function to do the new deferral threshold algorithm
+
+  #only use donations above 2, because then prev mean is defined
+  df <- df %>% filter(nth_don > 2)
   mean_ppf <- qnorm((1 + alpha_mean) / 2) # inverse of cdf
   outlier_ppf <- qnorm((1 + alpha_outlier) / 2)
-  
   if (verbose) {
     print("Calculating deferrals for alt strategy")
     cat("Using alpha for mean = ", alpha_mean, "-> percent point frac = ", mean_ppf, "\n")
     cat("Using alpha for outlier = ", alpha_outlier, "-> percent point frac = ", outlier_ppf, "\n")
   }
-  
+
   df <- df %>% mutate(prob_below_thres = if_else(Sex == "M", pnorm(CUTOFF_M, mean_Hb, mean_Hb_std), pnorm(CUTOFF_F, mean_Hb, mean_Hb_std)))
   # NOTE only downward for outliers
   if (use_prev_4) {
@@ -132,7 +139,7 @@ deferral_algorithm <- function(df,
       outlier_Hb_CI = prev_mean_Hb - outlier_ppf * std_dev_meas
     )
   }
-  
+
   df <- test_deferral(
     df,
     out_colname = "def_mean",
@@ -140,20 +147,26 @@ deferral_algorithm <- function(df,
     cutoff_M = cutoff_M,
     cutoff_F = cutoff_F
   )
-  df <- df %>% mutate(def_mean = if_else(nth_don == 1, def_true, def_mean))
-  
+                                      
+                                      
   # outlier detect
   # only below
   df <- df %>% mutate(
     def_outlier = if_else(Hb < outlier_Hb_CI, 1, 0),
     def_outlier = if_else(nth_don == 1, 0, def_outlier)
   )
-  
+
+  #for 1st and 2nd donation there is no prev mean, outlier possible for 1st
+  df <- df %>% mutate(def_mean = case_when(nth_don == 1 ~ def_true,
+                                           nth_don == 2 ~ def_true,
+                                           .default=def_mean)
+  )
+
   df <- df %>% mutate(
     def_OR = if_else(def_mean | def_outlier, 1, 0),
     def_AND = if_else(def_mean & def_outlier, 1, 0)
   )
-  
+
   df <- df %>% mutate(
     Hb_wrt_thres = ifelse(Sex == "M", Hb - CUTOFF_M, Hb - CUTOFF_F),
     FN = (def_true == 1) & (def_OR == 0),
@@ -161,7 +174,7 @@ deferral_algorithm <- function(df,
     TN = (def_true == 0) & (def_OR == 0),
     TP = (def_true == 1) & (def_OR == 1)
   )
-  
+
   return(df)
 }
 
@@ -171,9 +184,9 @@ create_confusion_matrix_data <- function(df, col, col_true = "def_true") {
   # create confusion matrix and store true/false positives/negatives counts in dataframe
   # Positive = deferral, negative = no deferral
   cf <- as.data.frame(confusionMatrix(as.factor(df[, col]), as.factor(df[, col_true]),
-                                      dnn = c("alt", "true"), positive = "1"
+    dnn = c("alt", "true"), positive = "1"
   )$table)
-  
+
   # Complicated way of transposing column to rows...
   # and convert to dataframe
   cf_df <- cbind(c("TN", "FP", "FN", "TP"), cf$Freq)
@@ -187,7 +200,7 @@ create_and_merge_confusion_matrix_and_save_means <- function(df, alpha_mean, alp
   # Merge confusion matrix dataframes from create_confusion_matrix_data for different columns
   cfs <- list()
   def_col_names <- c("def_mean", "def_outlier", "def_OR", "def_AND")
-  
+
   # loop over different types of deferral strageties based on mean or outlier and the combination OR/AND
   # calculate confusion matrix (FN, FP, TN, TP) for each strategy
   # Positive = deferral, negative = no deferral
@@ -200,67 +213,67 @@ create_and_merge_confusion_matrix_and_save_means <- function(df, alpha_mean, alp
   cf_df[, "alpha_mean"] <- alpha_mean
   cf_df[, "alpha_outlier"] <- alpha_outlier
   cf_df[, "sex"] <- sex
+  cf_df$true_deferrals <- sum(df$def_true)
   # calculate mean wrt threshold for false negatives and store
   # And store a few more things why not
-  #TODO: make functions of these. Sorry for all the repeated code now...
+  # TODO: make functions of these. Sorry for all the repeated code now...
   cf_df$mean_mean_Hb_FN <- mean(df$mean_Hb[df$FN == T], na.rm = T)
   cf_df$std_mean_Hb_FN <- sd(df$mean_Hb[df$FN == T], na.rm = T)
   cf_df$mean_prob_below_thres_FN <- mean(df$prob_below_thres[df$FN == T], na.rm = T)
   cf_df$std_prob_below_thres_fn <- sd(df$prob_below_thres[df$FN == T], na.rm = T)
-  
+
   cf_df$mean_mean_Hb_TN <- mean(df$mean_Hb[df$TN == T], na.rm = T)
   cf_df$std_mean_Hb_TN <- sd(df$mean_Hb[df$TN == T], na.rm = T)
   cf_df$mean_prob_below_thres_TN <- mean(df$prob_below_thres[df$TN == T], na.rm = T)
   cf_df$std_prob_below_thres_TN <- sd(df$prob_below_thres[df$TN == T], na.rm = T)
-  
+
   cf_df$mean_mean_Hb_FP <- mean(df$mean_Hb[df$FP == T], na.rm = T)
   cf_df$std_mean_Hb_FP <- sd(df$mean_Hb[df$FP == T], na.rm = T)
   cf_df$mean_prob_below_thres_FP <- mean(df$prob_below_thres[df$FP == T], na.rm = T)
   cf_df$std_prob_below_thres_FP <- sd(df$prob_below_thres[df$FP == T], na.rm = T)
-  
+
   cf_df$mean_mean_Hb_TP <- mean(df$mean_Hb[df$TP == T], na.rm = T)
   cf_df$std_mean_Hb_TP <- sd(df$mean_Hb[df$TP == T], na.rm = T)
   cf_df$mean_prob_below_thres_TP <- mean(df$prob_below_thres[df$TP == T], na.rm = T)
   cf_df$std_prob_below_thres_TP <- sd(df$prob_below_thres[df$TP == T], na.rm = T)
-  
+
   if (sex == "M") {
     mask_below <- df$mean_Hb < CUTOFF_M
   } else {
     mask_below <- df$mean_Hb < CUTOFF_F
   }
-  
-  #below thres for FN,FP,TN,TP
+
+  # below thres for FN,FP,TN,TP
   cf_df$n_mean_below_thres_FN <- sum(mask_below & (df$FN == T))
-  cf_df$below_thres_mean_mean_Hb_FN <- mean(df$mean_Hb[(df$FN==T)&mask_below], na.rm=T)
-  cf_df$below_thres_std_mean_Hb_FN <- sd(df$mean_Hb[(df$FN==T)&mask_below], na.rm=T)
+  cf_df$below_thres_mean_mean_Hb_FN <- mean(df$mean_Hb[(df$FN == T) & mask_below], na.rm = T)
+  cf_df$below_thres_std_mean_Hb_FN <- sd(df$mean_Hb[(df$FN == T) & mask_below], na.rm = T)
   cf_df$n_mean_below_thres_FP <- sum(mask_below & (df$FP == T))
-  cf_df$below_thres_mean_mean_Hb_FP <- mean(df$mean_Hb[(df$FP==T)&mask_below], na.rm=T)
-  cf_df$below_thres_std_mean_Hb_FP <- sd(df$mean_Hb[(df$FP==T)&mask_below], na.rm=T)
+  cf_df$below_thres_mean_mean_Hb_FP <- mean(df$mean_Hb[(df$FP == T) & mask_below], na.rm = T)
+  cf_df$below_thres_std_mean_Hb_FP <- sd(df$mean_Hb[(df$FP == T) & mask_below], na.rm = T)
   cf_df$n_mean_below_thres_TP <- sum(mask_below & (df$TP == T))
-  cf_df$below_thres_mean_mean_Hb_TP <- mean(df$mean_Hb[(df$TP==T)&mask_below], na.rm=T)
-  cf_df$below_thres_std_mean_Hb_TP <- sd(df$mean_Hb[(df$TP==T)&mask_below], na.rm=T)
+  cf_df$below_thres_mean_mean_Hb_TP <- mean(df$mean_Hb[(df$TP == T) & mask_below], na.rm = T)
+  cf_df$below_thres_std_mean_Hb_TP <- sd(df$mean_Hb[(df$TP == T) & mask_below], na.rm = T)
   cf_df$n_mean_below_thres_TN <- sum(mask_below & (df$TN == T))
-  cf_df$below_thres_mean_mean_Hb_TN <- mean(df$mean_Hb[(df$TN==T)&mask_below], na.rm=T)
-  cf_df$below_thres_std_mean_Hb_TN <- sd(df$mean_Hb[(df$TN==T)&mask_below], na.rm=T)
-  
-  #below thres old
-  cf_df$n_mean_below_thres_old <- sum(mask_below & ((df$TN == T) | (df$FP==T)))
-  cf_df$below_thres_mean_mean_Hb_old <- mean(df$mean_Hb[((df$TN==T)|(df$FP==T))&mask_below], na.rm=T)
-  cf_df$below_thres_std_mean_Hb_old <- sd(df$mean_Hb[((df$TN==T)|(df$FP==T))&mask_below], na.rm=T)
-  #below thres for new
-  cf_df$n_mean_below_thres_new <- sum(mask_below & ((df$TN == T) | (df$FN==T)))
-  cf_df$below_thres_mean_mean_Hb_new <- mean(df$mean_Hb[((df$TN==T)|(df$FN==T))&mask_below], na.rm=T)
-  cf_df$below_thres_std_mean_Hb_new <- sd(df$mean_Hb[((df$TN==T)|(df$FN==T))&mask_below], na.rm=T)
-  
+  cf_df$below_thres_mean_mean_Hb_TN <- mean(df$mean_Hb[(df$TN == T) & mask_below], na.rm = T)
+  cf_df$below_thres_std_mean_Hb_TN <- sd(df$mean_Hb[(df$TN == T) & mask_below], na.rm = T)
+
+  # below thres old
+  cf_df$n_mean_below_thres_old <- sum(mask_below & ((df$TN == T) | (df$FP == T)))
+  cf_df$below_thres_mean_mean_Hb_old <- mean(df$mean_Hb[((df$TN == T) | (df$FP == T)) & mask_below], na.rm = T)
+  cf_df$below_thres_std_mean_Hb_old <- sd(df$mean_Hb[((df$TN == T) | (df$FP == T)) & mask_below], na.rm = T)
+  # below thres for new
+  cf_df$n_mean_below_thres_new <- sum(mask_below & ((df$TN == T) | (df$FN == T)))
+  cf_df$below_thres_mean_mean_Hb_new <- mean(df$mean_Hb[((df$TN == T) | (df$FN == T)) & mask_below], na.rm = T)
+  cf_df$below_thres_std_mean_Hb_new <- sd(df$mean_Hb[((df$TN == T) | (df$FN == T)) & mask_below], na.rm = T)
+
+
   return(cf_df)
 }
 
-run_and_save <- function(use_prev_4 = F, test = T, save_intermediate = F) {
-  if (file.exists(file.path(FILE_DIR, DATAFILE_NAME_PREPROCESSED))) {
+run_and_save <- function(use_prev_4 = F, test = T, save_intermediate = F, use_preprocessed=F) {
+  if (file.exists(file.path(FILE_DIR, DATAFILE_NAME_PREPROCESSED)) & !test & use_preprocessed) {
     df <- readRDS(file.path(FILE_DIR, DATAFILE_NAME_PREPROCESSED))
-    if (test) {
-      df <- head(df, 10000)
-    }
+    cat("Using preprocessed file ", DATAFILE_NAME_PREPROCESSED, "BEWARE!")
   } else {
     data_file <- file.path(FILE_DIR, DATAFILE_NAME)
     df <- read_data(data_file, test = test)
@@ -268,10 +281,10 @@ run_and_save <- function(use_prev_4 = F, test = T, save_intermediate = F) {
       saveRDS(df, file.path(FILE_DIR, DATAFILE_NAME_PREPROCESSED))
     }
   }
-  
+
   # filter out first donations?
   # df <- df %>% filter(nth_don > 1)
-  
+
   if (test) {
     alpha_mean_test <- c(0.5, 0.99)
     alpha_outlier_test <- c(0.9, 0.999)
@@ -287,7 +300,7 @@ run_and_save <- function(use_prev_4 = F, test = T, save_intermediate = F) {
   for (alpha_mean in alpha_mean_test) {
     for (alpha_outlier in alpha_outlier_test) {
       # TODO: summary stats for all combinations of deferrals. confusion matrices...
-      
+
       # First copy dataframe and set deferral status for new algorithm using alpha mean and outlier
       df_ <- data.frame(df) # copy
       df_ <- deferral_algorithm(df_, alpha_mean, alpha_outlier, use_prev_4 = use_prev_4)
@@ -302,11 +315,11 @@ run_and_save <- function(use_prev_4 = F, test = T, save_intermediate = F) {
           saveRDS(df_, savefile)
         }
       }
-      
+
       # add to list and later rbind rows
       df_m <- df_ %>% filter(Sex == "M")
       df_f <- df_ %>% filter(Sex == "F")
-      
+
       # Create confusion matrix (TP,TF,FN,FP) for each strategy for this alphas
       cat("Creating confusion matrix\n")
       cf_m <- create_and_merge_confusion_matrix_and_save_means(df_m, alpha_mean, alpha_outlier, sex = "M")
@@ -317,7 +330,7 @@ run_and_save <- function(use_prev_4 = F, test = T, save_intermediate = F) {
       cat("\n")
     }
   }
-  
+
   result <- bind_rows(cfs)
   if (!test) {
     if (use_prev_4) {
@@ -325,8 +338,10 @@ run_and_save <- function(use_prev_4 = F, test = T, save_intermediate = F) {
     } else {
       write.csv(result, file.path(FILE_DIR, "confusion_matrix_results.csv"))
     }
+  } else {
+    write.csv(result, file.path(FILE_DIR, "test_results.csv"))
   }
-  
+
   tosave <- data.frame(
     Metric = c(
       "daterange_min",
@@ -355,7 +370,7 @@ run_and_save <- function(use_prev_4 = F, test = T, save_intermediate = F) {
     stringsAsFactors = FALSE
   )
   write.csv(tosave, file.path(FILE_DIR, "results_characteristics.csv"))
-  cat('... done \n')
+  cat("... done \n")
   return(result)
 }
 
