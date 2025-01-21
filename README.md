@@ -3,7 +3,7 @@
 Generic R-code was developed that allows performing an initial analyses of potential benefits of a mean Hb-level based donor deferral policy that compensates for biological and measurement variability. A more complete discourse of this approach is provided in the paper *“Why the Majority of On-Site Repeat Donor Deferrals Are Completely Unwarranted…”* (Transfusion 2022, 62 (10), 2068–2075. https://doi.org/10.1111/trf.17085).
 
 ## Packages
-Need `dplyr` and `zoo` and `caret` for the alternative deferral analysis.
+Need `dplyr` and `zoo` and `caret` for the alternative deferral analysis. `ggplot2`, `ggnewscale`, and `patchwork` are used for the plotting portions of this code. 
 
 ## Data
 The input required to run the code is an .rds file containing 4 variables:

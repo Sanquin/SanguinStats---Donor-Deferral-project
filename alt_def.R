@@ -1,7 +1,10 @@
 library(dplyr) # for data processing
 library(zoo) # for rolling mean
 library(caret)
-codeversion <- 20250106
+library(ggplot2)
+library(ggnewscale)
+library(patchwork)
+codeversion <- 20250107
 
 
 # The code is structed at follows:
@@ -15,38 +18,44 @@ codeversion <- 20250106
 #      the number of deferrals in both new and old algorithm
 # ...done
 # 4. merge the confusion matrices for each alpha_mean and alpha_outlier and save them to csv
+# 5. store a few data characterics in another file
+
 
 
 # These values need to be changed for each country
-FILE_DIR <- "filepath" #add your data directory here
+FILE_DIR <- "./insert_path"
 DATAFILE_NAME <- "fullhistory.rds"
 
 datafile_name_withoutext <- gsub(".rds", "", DATAFILE_NAME)
 DATAFILE_NAME_PREPROCESSED <- paste0(datafile_name_withoutext, "_preprocessed.rds")
 
-# Change the deferral threshold here per country, in the same units as is in the data, i.e. mmol/L or or g/L or ... and change UNITS to either 
-CUTOFF_M <- 8.4 # in mmol/L
-CUTOFF_F <- 7.8 # in mmol/L
-UNITS <- "mmol/L" # or 'g/L' or 'g/dL'
+# Change the deferral threshold here per country, in the same units as is in the data, i.e. mmol/L or g/dL or g/L or ...
+#
+CUTOFF_M <- 8.4 # mmol/L, change to cut off in your units of measurement
+CUTOFF_F <- 7.8 # mmol/L, change to cut off in your units of measurement
+UNITS <- "mmol/L"
+# uncomment correct below
+# UNITS <- 'g/dL'
+# UNITS <- 'g/L'
 
+# Do NOT change anything below, skip to the last line of the code to run the analysis.
 
 TEST <- F # If test use only 10000 rows
-
-# do not change anything beyond this point
-
-NMIN_DONATIONS <- 2 # do not use 1st/2nd, because there is no mean, might need to change if use rolling_mean
+NMIN_DONATIONS <- 2 # NMIN_DONATIONS indicates the number of donations disregarded from the analysis, set at 2 because at the first 2 donations there is no "mean of previous donations"
 ROLLING_MEAN <- 0
+SAVE_EXAMPLES <- T
 
 # only used for outliers
 if (UNITS == "mmol/L") {
   CONVERSION_FACTOR <- 1.
-} else if (UNITS == "g/dL"){
+} else if (UNITS == "g/dL") {
   CONVERSION_FACTOR <- 1.610306
-} else if (UNITS == "g/L"){
-  CONVERSION_FACTOR <- 16.11344
+} else if (UNITS == "g/L") {
+  CONVERSION_FACTOR <- 16.10306
+} else {
+  stop("UNITS should be one of [mmol/L, g/dL, g/L]")
 }
 
-# Do NOT change anything below
 
 test_deferral <- function(df,
                           out_colname = "def",
@@ -80,9 +89,8 @@ read_data <- function(file_path,
     group_by(KeyID) %>%
     mutate(ndons = n()) %>%
     ungroup() %>%
-    filter(ndons > nmin_donations) %>%
-    #remove really high Hb values (Hb > 16 mmol/L or 25 g/dL)
-    filter(!is.na(Hb), Hb < 16. * CONVERSION_FACTOR, Hb > 1 * CONVERSION_FACTOR)
+    filter(ndons > nmin_donations, !is.na(Hb), Hb < 16. * CONVERSION_FACTOR, Hb > 1 * CONVERSION_FACTOR, Sex %in% c("M", "F"))
+  # remove really high Hb values (Hb > 16 mmol/L or 25 g/dL)
 
   print("Calculating true deferrals")
   df <- test_deferral(df, out_colname = "def_true", Hb_test_col = "Hb")
@@ -119,6 +127,8 @@ read_data <- function(file_path,
     mutate(
       mean_Hb_std = std_dev_meas / sqrt(nth_don),
       prev_mean_Hb_std = std_dev_meas / sqrt(nth_don - 1),
+      mean_Hb = if_else(nth_don == 1, NA, mean_Hb), # not defined, so set to NA
+      prev_mean_Hb = if_else(nth_don == 2, NA, prev_mean_Hb),
     )
 
   if (rolling_mean > 1) {
@@ -149,6 +159,93 @@ read_data <- function(file_path,
   return(df)
 }
 
+sample_example_donor <- function(df, n = 1) {
+  sample_donor <- df %>%
+    ungroup() %>%
+    filter(KeyID %in% sample(unique(KeyID), n))
+
+  return(sample_donor)
+}
+
+plot_example <- function(sample_donor) {
+  if (sample_donor$Sex[1] == "M") {
+    sample_donor$cutoff <- CUTOFF_M
+  } else {
+    sample_donor$cutoff <- CUTOFF_F
+  }
+  sample_donor$low_mean <- sample_donor$mean_Hb_CI
+  sample_donor$high_mean <- sample_donor$mean_Hb + (sample_donor$mean_Hb - sample_donor$mean_Hb_CI)
+  sample_donor$low_outlier <- sample_donor$outlier_Hb_CI
+  sample_donor$high_outlier <- sample_donor$mean_Hb + (sample_donor$prev_mean_Hb - sample_donor$outlier_Hb_CI)
+  sample_donor$def_mean <- as.logical(sample_donor$def_mean)
+  sample_donor$def_outlier <- as.logical(sample_donor$def_outlier)
+  sample_donor$def_alt <- as.logical(sample_donor$def_alt)
+  sample_donor$def_true <- as.logical(sample_donor$def_true)
+
+  p <- ggplot(sample_donor, aes(x = nth_don, y = Hb)) +
+    geom_ribbon(aes(ymin = low_mean, ymax = high_mean, fill = "Mean CI"), alpha = 0.3) +
+    geom_ribbon(aes(ymin = low_outlier, ymax = high_outlier, fill = "Outlier CI"), alpha = 0.3) +
+    geom_line(aes(y = cutoff, x = nth_don, linetype = "Legal Hb threshold", color = "Legal Hb threshold"), linewidth = 0.70) +
+    geom_line(aes(y = mean_Hb, x = nth_don, linetype = "Mean", color = "Mean"), linewidth = 1) +
+    geom_line(aes(y = Hb, x = nth_don), color = "black", linewidth = 0.5, linetype = "solid") +
+    scale_color_manual(
+      name = "", values = c("black", "#0072b2"),
+      labels = c("Legal Hb threshold", "Mean"),
+      guide = guide_legend(order = 1, title = NULL)
+    ) +
+    scale_linetype_manual(
+      name = "",
+      values = c("Legal Hb threshold" = "solid", "Mean" = "solid"),
+      guide = guide_legend(order = 1, title = NULL)
+    ) +
+    new_scale_color() +
+    geom_point(aes(shape = def_true, color = def_alt), size = 4, stroke = 1) +
+    scale_color_manual(
+      name = "New algorithm", values = c("#009e73", "#d55e00"),
+      labels = c("Donation", "Deferral"), guide = guide_legend(order = 4)
+    ) +
+    scale_shape_manual(name = "Current algorithm", values = c(16, 1), labels = c("Donation", "Deferral"), guide = guide_legend(order = 3)) +
+    new_scale("shape") +
+    geom_point(data = subset(sample_donor, def_outlier), aes(x = nth_don + 0.1, y = Hb, shape = "Outlier"), color = "#d55e00", size = 3, stroke = 4) +
+    scale_shape_manual(values = c("Outlier" = "!"), labels = c("Outlier observation"), guide = guide_legend(order = 5, title = NULL)) +
+    theme_minimal() +
+    labs(x = "nth donation", y = paste("Hemoglobin", UNITS))
+
+  return(p)
+}
+
+sample_and_plot <- function(df) {
+  sample_donor <- sample_example_donor(df)
+  p <- plot_example(sample_donor)
+  return(p)
+}
+
+make_all_examples_and_plot <- function(df, savefile) {
+  df_group <- df %>%
+    filter(ndons > 3) %>%
+    group_by(KeyID)
+
+  p_FN_m <- sample_and_plot(df_group %>% filter(any(FN == T), Sex == "M")) + labs(title = "FN")
+  p_FP_m <- sample_and_plot(df_group %>% filter(any(FP == T), Sex == "M")) + labs(title = "FP")
+  p_TN_m <- sample_and_plot(df_group %>% filter(any(TN == T), Sex == "M")) + labs(title = "TN")
+  p_TP_m <- sample_and_plot(df_group %>% filter(any(TP == T), Sex == "M")) + labs(title = "TP")
+
+  p_FN_f <- sample_and_plot(df_group %>% filter(any(FN == T), Sex == "F")) + labs(title = "FN")
+  p_FP_f <- sample_and_plot(df_group %>% filter(any(FP == T), Sex == "F")) + labs(title = "FP")
+  p_TN_f <- sample_and_plot(df_group %>% filter(any(TN == T), Sex == "F")) + labs(title = "TN")
+  p_TP_f <- sample_and_plot(df_group %>% filter(any(TP == T), Sex == "F")) + labs(title = "TP")
+
+  plot_dir <- paste0(FILE_DIR, "/example_plots/")
+  if (!dir.exists(plot_dir)) {
+    dir.create(plot_dir, recursive = TRUE)
+  }
+  p_m <- p_FN_m + p_FP_m + p_TN_m + p_TP_m
+  p_m <- p_m + plot_layout(guides = "collect") & theme(legend.position = "right", legend.spacing.y = unit(5, "pt"))
+  ggsave(filename = paste0(plot_dir, paste0(savefile, "_m.png")), plot = p_m, height = 15, width = 20)
+  p_f <- p_FN_f + p_FP_f + p_TN_f + p_TP_f
+  p_f <- p_f + plot_layout(guides = "collect") & theme(legend.position = "right", legend.spacing.y = unit(5, "pt"))
+  ggsave(filename = paste0(plot_dir, paste0(savefile, "_f.png")), plot = p_f, height = 15, width = 20)
+}
 
 deferral_algorithm <- function(df,
                                alpha_mean,
@@ -157,13 +254,6 @@ deferral_algorithm <- function(df,
                                cutoff_F = CUTOFF_F,
                                rolling_mean = 0) {
   # Function to do the new deferral threshold algorithm
-
-  # only use donations above 2, because then prev mean is defined
-  if (rolling_mean > 1) {
-    df %>% filter(nth_don > 4)
-  } else {
-    df <- df %>% filter(nth_don > 2)
-  }
   # a fraction alpha is higher than this value
   mean_ppf <- qnorm((1 + alpha_mean) / 2) # inverse of cdf, aka ppf
   # TODO: alpha_outlier = 0, 1 does not work
@@ -197,6 +287,8 @@ deferral_algorithm <- function(df,
   # outlier detect, only below
   df <- df %>% mutate(
     def_outlier = if_else(Hb < outlier_Hb_CI, 1, 0),
+    def_outlier = if_else(is.na(def_outlier), 0, def_outlier),
+    def_mean = if_else(is.na(def_mean), 0, def_mean)
     # def_outlier = if_else(nth_don == 1, 0, def_outlier) #no need for this but could be implemented like so
   )
 
@@ -219,13 +311,23 @@ deferral_algorithm <- function(df,
     )
   }
 
-
   df <- df %>% mutate(
     FN = (def_true == 1) & (def_alt == 0),
     FP = (def_true == 0) & (def_alt == 1),
     TN = (def_true == 0) & (def_alt == 0),
     TP = (def_true == 1) & (def_alt == 1)
   )
+
+  # save some examples
+  if (SAVE_EXAMPLES){
+    make_all_examples_and_plot(df, savefile = paste0("examples_amean=", alpha_mean, "_alphaout=", alpha_outlier, "_rm=", rolling_mean))
+  }
+
+  if (rolling_mean > 1) {
+    df %>% filter(nth_don > 4)
+  } else {
+    df <- df %>% filter(nth_don > 2)
+  }
 
   return(df)
 }
@@ -310,7 +412,7 @@ run_and_save <- function(test = T, save_intermediate = F, use_preprocessed = F, 
   }
 
   if (test) {
-    alpha_mean_test <- c(0.)
+    alpha_mean_test <- c(0.68)
     alpha_outlier_test <- c(0.999)
   } else {
     # the confidence (interval) that the mean is below the cutoff
@@ -318,7 +420,7 @@ run_and_save <- function(test = T, save_intermediate = F, use_preprocessed = F, 
       -0.999, -0.9, -0.8, -0.7, -0.6, -0.5, -0.4, -0.3, -0.2, -0.1, 0.,
       0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.99, 0.999
     )
-    #the prob of a measurement deviating from the mean
+    # the prob of a measurement deviating from the mean
     alpha_outlier_test <- c(0.99, 0.999, 0.9999)
   }
 
@@ -365,7 +467,7 @@ run_and_save <- function(test = T, save_intermediate = F, use_preprocessed = F, 
       cat("\n")
     }
   }
-  results <- bind_rows(outputs) #combine agg outputs to dataframe
+  results <- bind_rows(outputs) # combine agg outputs to dataframe
 
   cat("Saving files at", FILE_DIR)
   if (!test) {
@@ -391,6 +493,11 @@ run_and_save <- function(test = T, save_intermediate = F, use_preprocessed = F, 
       "mean_std_dev_meas_M",
       "mean_std_dev_meas_F",
       "InputFile",
+      "Cutoff_m",
+      "Cutoff_f",
+      "units",
+      "nmin_donations",
+      "rolling_mean",
       "codeversion"
     ),
     Value = c(
@@ -403,6 +510,11 @@ run_and_save <- function(test = T, save_intermediate = F, use_preprocessed = F, 
       mean(df$std_dev_meas[df$Sex == "M"]),
       mean(df$std_dev_meas[df$Sex == "F"]),
       as.character(file.path(FILE_DIR, DATAFILE_NAME)),
+      CUTOFF_M,
+      CUTOFF_F,
+      UNITS,
+      NMIN_DONATIONS,
+      ROLLING_MEAN,
       as.character(codeversion)
     ),
     stringsAsFactors = FALSE
@@ -417,4 +529,5 @@ run_and_save <- function(test = T, save_intermediate = F, use_preprocessed = F, 
 # They are set to NA and so the total number of donations is NOT correct
 # So either do not use this, or implement some strategy for this
 
+#Run the analysis using the line below
 results <- run_and_save(test = TEST, use_preprocessed = F, save_intermediate = F, nmin_donations = NMIN_DONATIONS, rolling_mean = ROLLING_MEAN)
