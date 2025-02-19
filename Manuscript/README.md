@@ -1,6 +1,6 @@
 In this folder, the scripts used to produce the tables and figures in the manuscript are displayed.
 
-- Algorithm_plot.R produced the example plots of the workings of the algorithm (Figure 1A and Figure 1B).
-- process_results.R produced the results in Table 3.
-- plot_per_country.R processes and plots the results of each country individually.
-- plot_countries_combined.R processes and plots the results of all countries in 1 figure per outcome, as shown in the supplemental materials.
+- [Algorithm_plot.R](https://github.com/Sanquin/SanguinStats---Donor-Deferral-project/blob/main/Manuscript/Algorithm%20plot.R) produced the example plots of the workings of the algorithm (Figure 1A and Figure 1B).
+- [process_results.R](https://github.com/Sanquin/SanguinStats---Donor-Deferral-project/blob/main/Manuscript/process_results.R) produced the results in Table 3.
+- [plot_per_country.R](https://github.com/Sanquin/SanguinStats---Donor-Deferral-project/blob/main/Manuscript/plot_per_country.R) processes and plots the results of each country individually. These figures are not included in the manuscript or supplemental materials, but the script may be used after running the analysis to visualize results in an accessible way.
+- [plot_countries_combined.R](https://github.com/Sanquin/SanguinStats---Donor-Deferral-project/blob/main/Manuscript/plot_countries_combined.R) processes and plots the results of all countries in 1 figure per outcome, as shown in the supplemental materials.
