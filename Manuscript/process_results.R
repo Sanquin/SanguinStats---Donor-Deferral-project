@@ -102,9 +102,10 @@ conversion_factor_gl <- 10
 convert_cols <- c("Cutoff_m", "Cutoff_f", "mean_std_dev_meas_M", "mean_std_dev_meas_F")
 
 combined_characteristics[convert_cols] <- lapply(combined_characteristics[convert_cols], function(col) {
-  col <-  as.numeric(col)
-  ifelse(combined_characteristics$units == "mmol/L", col / conversion_factor_mmol, col)
-  ifelse(combined_characteristics$units == "g/L", col / conversion_factor_gl, col)
+  col <- as.numeric(col) 
+  col <- ifelse(combined_characteristics$units == "mmol/L", col / conversion_factor_mmol, col)
+  col <- ifelse(combined_characteristics$units == "g/L", col / conversion_factor_gl, col)
+  return(col) 
 })
 
 combined_characteristics$units <- ifelse(combined_characteristics$units == "mmol/L", "g/dL", combined_characteristics$units)
@@ -126,7 +127,7 @@ country_data <- list()
 
 # Loop over each country
 for (country in countries) {
-  daterange <- c(combined_characteristics$daterange_min[combined_characteristics$country == country],combined_characteristics$daterange_max[combined_characteristics$country == country])
+  daterange <- as.character(c(combined_characteristics$daterange_min[combined_characteristics$country == country],combined_characteristics$daterange_max[combined_characteristics$country == country]))
   
   donors <- round(sum(as.numeric(combined_characteristics$donors_M[combined_characteristics$country == country]),as.numeric(combined_characteristics$donors_F[combined_characteristics$country == country])),0)
   
@@ -146,14 +147,14 @@ for (country in countries) {
   mean_females <- round(combined_data$mean_mean_Hb_new[combined_data$sex=="F"&combined_data$country==country],1)
 
 # Store values in a named vector for the country
-country_data[[country]] <- c(donors, donations, current_deferral, alt_deferral, change_def, ineligible_donations, change_donations, mean_males, mean_females)
+country_data[[country]] <- c(daterange, donors, donations, current_deferral, alt_deferral, change_def, ineligible_donations, change_donations, mean_males, mean_females)
 }
 
 # Convert the list into a dataframe
 results_table <- as.data.frame(do.call(cbind, country_data))
 
 # Add row names to specify the metrics
-rownames(results_table) <- c("Donors", "Donations", "Current Deferral", "Alternative Deferral", "Change in Deferral", "Ineligible Donations", "Change in Donations", "Mean new males", "Mean new females")
+rownames(results_table) <- c("Date min", "Date max", "Donors", "Donations", "Current Deferral", "Alternative Deferral", "Change in Deferral", "Ineligible Donations", "Change in Donations", "Mean new males", "Mean new females")
 
 # Print or return the dataframe
 print(results_table)
