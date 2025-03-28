@@ -112,7 +112,7 @@ combined_characteristics$units <- ifelse(combined_characteristics$units == "mmol
 combined_characteristics$units <- ifelse(combined_characteristics$units == "g/L", "g/dL", combined_characteristics$units)
 
 #process the combined data file to include only the results from parameters we selected
-combined_data <- combined_data[combined_data$alpha_mean==0.5 & combined_data$alpha_outlier==0.999,]
+combined_data <- combined_data[combined_data$alpha_mean==0 & combined_data$alpha_outlier==0.999,]
 
 #save both files
 write_xlsx(combined_data, paste0(results_path, "/combined/combined_data.xlsx"))
@@ -143,8 +143,8 @@ for (country in countries) {
   
   change_donations <- round((((sum(combined_data$total_donations_new[combined_data$country == country & combined_data$sex == "M"], combined_data$total_donations_new[combined_data$country == country & combined_data$sex == "F"]) - sum(combined_data$total_donations_old[combined_data$country == country & combined_data$sex == "M"], combined_data$total_donations_old[combined_data$country == country & combined_data$sex == "F"])) /sum(combined_data$total_donations_old[combined_data$country == country & combined_data$sex == "M"], combined_data$total_donations_old[combined_data$country == country & combined_data$sex == "F"]))) * 100,2)
   
-  mean_males <- round(combined_data$mean_mean_Hb_new[combined_data$sex=="M"&combined_data$country==country],1)
-  mean_females <- round(combined_data$mean_mean_Hb_new[combined_data$sex=="F"&combined_data$country==country],1)
+  mean_males <- round(combined_data$mean_mean_Hb_FN[combined_data$sex=="M"&combined_data$country==country],1)
+  mean_females <- round(combined_data$mean_mean_Hb_FN[combined_data$sex=="F"&combined_data$country==country],1)
 
 # Store values in a named vector for the country
 country_data[[country]] <- c(daterange, donors, donations, current_deferral, alt_deferral, change_def, ineligible_donations, change_donations, mean_males, mean_females)

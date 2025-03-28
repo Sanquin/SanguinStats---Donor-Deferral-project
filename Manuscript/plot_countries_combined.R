@@ -91,6 +91,25 @@ for (file in cf_list) {
 # Define color palettes
 colors <- c("#6A3D9A", "#FFD700","#4A90E2", "#27408B", "#FF7F00",  "#33A02C","#E31A1C")
 
+facet_names <- list(
+  '0.99' = as.expression(bquote(alpha["  outlier"] == 0.99)),
+  '0.999' = as.expression(bquote(alpha["  outlier"] == 0.999)),
+  '0.9999' = as.expression(bquote(alpha["  outlier"] == 0.9999))
+)
+
+facet2_names <- list(
+  'F'="Female",
+  'M'="Male"
+)
+
+facet_labeller <- function(variable,value){
+  if (variable=='alpha_outlier') {
+    return(facet_names[value])
+  } else {
+    return(facet2_names[value])
+  }
+}
+
 # Function to create facet plots with different color schemes
 template_plot <- function(data, x_var, y_var, y_label, title, y_limits = NULL) {
   p <- ggplot(data, aes_string(x = x_var, y = y_var, color = "country", linetype = "'Alternative'")) +
@@ -99,11 +118,11 @@ template_plot <- function(data, x_var, y_var, y_label, title, y_limits = NULL) {
     geom_line(size = 0.8) +
     theme_bw() +
     labs(
-      x = expression(alpha["mean"]),
+      x = expression(alpha["  mean"]),
       y = y_label,
       title = title
     ) +
-    facet_grid(sex ~ alpha_outlier, scales = "free", space = "free") +
+    facet_grid(sex ~ alpha_outlier, scales = "free", space = "free", labeller=facet_labeller) +
     scale_color_manual(values = setNames(
       colors,
       unique(data$country)
@@ -143,7 +162,7 @@ plots <- list(
   "deferral_rate" = template_plot(combined_data, "alpha_mean", "(n_def_alt / total) * 100", "Percentage", "Deferral rate", c(0, 10)),
   "perc_mean_deferrals" = template_plot(combined_data, "alpha_mean", "perc_mean_def", "Percentage", "Percentage mean deferrals", c(0, 100)),
   "perc_outlier_deferrals" = template_plot(combined_data, "alpha_mean", "perc_outlier_def", "Percentage", "Percentage outlier deferrals", c(0, 100)),
-  "deferral_reduction" = template_plot(combined_data, "alpha_mean", "deferral_reduction_perc", "Percentage", "Deferral reduction", c(-50, 100)),
+  "deferral_reduction" = template_plot(combined_data, "alpha_mean", "deferral_reduction_perc", "Percentage", "Deferral reduction", c(-100, 100)),
   "ineligible_donations" = template_plot(combined_data, "alpha_mean", "wrong_donations_prevented_perc", "Percentage", "Ineligible donations", c(0, 20)),
   "mean mean hb all donors alt strat" = template_plot(combined_data, "alpha_mean", "mean_mean_Hb_donations", "Hb (g/dL)", "Mean of mean Hb in all donors donating with alternative strategy", c(13, 17)),
   "mean mean hb new donors alt strat" = template_plot(combined_data, "alpha_mean", "mean_mean_Hb_FN", "Hb (g/dL)", "Mean of mean Hb in new donors donating with alternative strategy", c(12, 15))
